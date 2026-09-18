@@ -1,0 +1,11 @@
+services:
+  web:
+    image: nginx:alpine
+    container_name: trade-backtester
+    ports:
+      - "8080:80"
+    volumes:
+      # Live wijzigingen zonder opnieuw te starten
+      - ./index.html:/usr/share/nginx/html/index.html:ro
+      - ./js:/usr/share/nginx/html/js:ro
+    restart: unless-stopped
