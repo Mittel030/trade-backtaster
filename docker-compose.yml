@@ -3,9 +3,12 @@ services:
     image: nginx:alpine
     container_name: trade-backtester
     ports:
-      - "8080:80"
+      - "8090:80"
     volumes:
       # Live wijzigingen zonder opnieuw te starten
       - ./index.html:/usr/share/nginx/html/index.html:ro
+      - ./replay.html:/usr/share/nginx/html/replay.html:ro
       - ./js:/usr/share/nginx/html/js:ro
+      # Proxy voor Yahoo Finance-koersdata (MNQ, MES)
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     restart: unless-stopped

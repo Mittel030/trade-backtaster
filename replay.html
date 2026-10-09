@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#020617">
+  <title>Replay · Trade Backtester</title>
+  <!-- Tailwind CSS via CDN, vaste versie zodat een update de app niet kan breken -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.11"></script>
+  <!-- TradingView Lightweight Charts voor de candlestick-grafiek -->
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+  <main class="max-w-3xl mx-auto p-4 space-y-4">
+
+    <header class="space-y-3">
+      <div>
+        <h1 class="text-2xl font-bold">Trade Backtester</h1>
+        <p class="text-slate-400 text-sm">Speel oude marktdata candle voor candle af en oefen je strategie.</p>
+      </div>
+      <nav class="grid grid-cols-2 gap-2 bg-slate-900 rounded-xl p-1 text-sm font-semibold text-center">
+        <a href="index.html" class="text-slate-400 hover:text-slate-100 rounded-lg p-2">Journaal</a>
+        <a href="replay.html" class="bg-slate-700 rounded-lg p-2">Replay</a>
+      </nav>
+    </header>
+
+    <!-- Stap 1: replay instellen -->
+    <section id="setup" class="bg-slate-900 rounded-xl p-4">
+      <h2 class="font-semibold mb-3">Nieuwe replay-sessie</h2>
+      <form id="setup-form" class="grid grid-cols-2 gap-3" novalidate>
+        <label class="col-span-2 text-xs text-slate-400">
+          Markt
+          <select name="source" class="mt-1 w-full bg-slate-800 text-slate-100 text-base rounded-lg p-3">
+            <option value="MNQ">MNQ – Micro Nasdaq-100 ($2 per punt)</option>
+            <option value="MES">MES – Micro S&amp;P 500 ($5 per punt)</option>
+            <option value="csv">Eigen CSV-bestand</option>
+          </select>
+        </label>
+
+        <!-- Alleen voor MNQ/MES (data van Yahoo Finance) -->
+        <label data-source="futures" class="col-span-2 text-xs text-slate-400">
+          Timeframe
+          <select name="interval" class="mt-1 w-full bg-slate-800 text-slate-100 text-base rounded-lg p-3">
+            <option value="1m">1 minuut (laatste 30 dagen)</option>
+            <option value="5m" selected>5 minuten (laatste 60 dagen)</option>
+            <option value="15m">15 minuten (laatste 60 dagen)</option>
+            <option value="30m">30 minuten (laatste 60 dagen)</option>
+            <option value="1h">1 uur (laatste 2 jaar)</option>
+            <option value="1d">1 dag (sinds 2019)</option>
+          </select>
+        </label>
+
+        <!-- Alleen voor CSV -->
+        <label data-source="csv" class="hidden col-span-2 text-xs text-slate-400">
+          CSV-bestand (kolommen: tijd, open, high, low, close)
+          <input name="file" type="file" accept=".csv,.txt,text/csv"
+                 class="mt-1 w-full bg-slate-800 text-slate-100 text-sm rounded-lg p-3 file:mr-3 file:rounded file:border-0 file:bg-slate-700 file:px-3 file:py-1 file:text-slate-100">
+        </label>
+        <label data-source="csv" class="hidden col-span-2 text-xs text-slate-400">
+          Naam van de markt
+          <input name="csvSymbol" placeholder="bv. MNQ, MES of AAPL" autocomplete="off"
+                 class="mt-1 w-full bg-slate-800 text-slate-100 text-base rounded-lg p-3 uppercase">
+        </label>
+
+        <label class="col-span-2 text-xs text-slate-400">
+          Startmoment (je ziet alleen de candles hiervóór)
+          <input name="start" type="datetime-local"
+                 class="mt-1 w-full bg-slate-800 text-slate-100 text-base rounded-lg p-3">
+        </label>
+        <label class="col-span-2 text-xs text-slate-400">
+          Strategie
+          <input name="strategy" placeholder="bv. Opening range breakout" list="strategy-options" autocomplete="off"
+                 class="mt-1 w-full bg-slate-800 text-slate-100 text-base rounded-lg p-3">
+          <datalist id="strategy-options"></datalist>
+        </label>
+        <label class="text-xs text-slate-400">
+          Startbalans ($)
+          <input name="balance" type="number" step="any" min="0" inputmode="decimal" value="10000"
+                 class="mt-1 w-full bg-slate-800 text-slate-100 text-base rounded-lg p-3">
+        </label>
+        <label class="text-xs text-slate-400">
+          Kosten per contract ($)
+          <input name="fee" type="number" step="any" min="0" inputmode="decimal" value="0"
+                 class="mt-1 w-full bg-slate-800 text-slate-100 text-base rounded-lg p-3">
+        </label>
+
+        <p id="setup-error" role="alert"
+           class="hidden col-span-2 text-sm text-red-300 bg-red-950/60 rounded-lg p-3"></p>
+        <button id="setup-button" type="submit"
+                class="col-span-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-50 rounded-lg p-3 font-semibold">
+          Start replay
+        </button>
+      </form>
+    </section>
+
+    <!-- Stap 2: de replay zelf -->
+    <section id="replay" class="hidden space-y-4">
+
+      <!-- Grafiek -->
+      <div class="bg-slate-900 rounded-xl p-3 space-y-2">
+        <div class="flex justify-between items-baseline gap-2 text-sm">
+          <p id="replay-title" class="font-semibold truncate"></p>
+          <p id="replay-time" class="text-slate-400 text-xs whitespace-nowrap"></p>
+        </div>
+        <div id="chart" class="h-[50vh] min-h-[280px] w-full"></div>
+        <p id="replay-message" class="hidden text-xs text-amber-300"></p>
+      </div>
+
+      <!-- Bediening -->
+      <div class="bg-slate-900 rounded-xl p-3 grid grid-cols-4 gap-2 text-sm font-semibold">
+        <button id="play-button" type="button"
+                class="col-span-2 bg-slate-700 hover:bg-slate-600 rounded-lg p-3">▶ Afspelen</button>
+        <button id="next-button" type="button"
+                class="bg-slate-700 hover:bg-slate-600 rounded-lg p-3" title="Volgende candle (→)">⏭ +1</button>
+        <select id="speed-select" class="bg-slate-800 rounded-lg p-3 min-w-0" aria-label="Snelheid">
+          <option value="1000">1×</option>
+          <option value="500" selected>2×</option>
+          <option value="200">5×</option>
+          <option value="80">10×</option>
+        </select>
+      </div>
+
+      <!-- Order plaatsen -->
+      <div id="order-panel" class="bg-slate-900 rounded-xl p-4">
+        <div class="flex justify-between items-baseline mb-3">
+          <h2 class="font-semibold">Order</h2>
+          <p class="text-sm">Prijs: <span id="current-price" class="font-bold"></span></p>
+        </div>
+        <div class="grid grid-cols-3 gap-3">
+          <label class="text-xs text-slate-400">
+            Contracten
+            <input id="order-qty" type="number" step="1" min="1" inputmode="numeric" value="1"
+                   class="mt-1 w-full bg-slate-800 text-slate-100 text-base rounded-lg p-3">
+          </label>
+          <label class="text-xs text-slate-400">
+            Stop-loss
+            <input id="order-sl" type="number" step="any" min="0" inputmode="decimal" placeholder="optioneel"
+                   class="mt-1 w-full bg-slate-800 text-slate-100 text-base rounded-lg p-3">
+          </label>
+          <label class="text-xs text-slate-400">
+            Take-profit
+            <input id="order-tp" type="number" step="any" min="0" inputmode="decimal" placeholder="optioneel"
+                   class="mt-1 w-full bg-slate-800 text-slate-100 text-base rounded-lg p-3">
+          </label>
+          <p id="order-error" role="alert"
+             class="hidden col-span-3 text-sm text-red-300 bg-red-950/60 rounded-lg p-3"></p>
+          <button id="buy-button" type="button"
+                  class="col-span-3 sm:col-span-1 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 rounded-lg p-3 font-semibold">
+            Buy / Long
+          </button>
+          <button id="sell-button" type="button"
+                  class="col-span-3 sm:col-span-1 bg-red-600 hover:bg-red-500 active:bg-red-700 rounded-lg p-3 font-semibold">
+            Sell / Short
+          </button>
+          <p class="col-span-3 sm:col-span-1 text-xs text-slate-500 self-center">
+            Je stapt in op de slotkoers van de laatste candle.
+          </p>
+        </div>
+      </div>
+
+      <!-- Open positie -->
+      <div id="position-panel" class="hidden">
+        <div class="bg-slate-900 rounded-xl p-4 flex justify-between items-center gap-3">
+          <div class="min-w-0">
+            <p id="position-title" class="font-semibold"></p>
+            <p id="position-meta" class="text-xs text-slate-400"></p>
+          </div>
+          <div class="text-right shrink-0">
+            <p id="position-pnl" class="font-bold"></p>
+            <button id="close-button" type="button"
+                    class="mt-1 bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-2 text-sm font-semibold">Sluiten</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sessie-statistieken -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+        <div class="bg-slate-900 rounded-xl p-3">
+          <p class="text-xs text-slate-400">Balans</p>
+          <p id="session-balance" class="text-lg font-bold"></p>
+        </div>
+        <div class="bg-slate-900 rounded-xl p-3">
+          <p class="text-xs text-slate-400">Sessie P&amp;L</p>
+          <p id="session-pnl" class="text-lg font-bold"></p>
+        </div>
+        <div class="bg-slate-900 rounded-xl p-3">
+          <p class="text-xs text-slate-400">Win rate</p>
+          <p id="session-winrate" class="text-lg font-bold"></p>
+        </div>
+        <div class="bg-slate-900 rounded-xl p-3">
+          <p class="text-xs text-slate-400">Trades</p>
+          <p id="session-count" class="text-lg font-bold"></p>
+        </div>
+      </div>
+
+      <!-- Trades van deze sessie -->
+      <div class="bg-slate-900 rounded-xl p-4">
+        <h2 class="font-semibold mb-1">Trades in deze sessie</h2>
+        <p class="text-xs text-slate-500 mb-3">Gesloten trades worden automatisch in je journaal opgeslagen.</p>
+        <ul id="session-list" class="space-y-2"></ul>
+        <p id="session-empty" class="text-slate-500 text-sm text-center py-4">Nog geen trades.</p>
+      </div>
+
+      <button id="stop-button" type="button"
+              class="w-full bg-slate-800 hover:bg-slate-700 rounded-xl p-3 text-sm font-semibold text-slate-300">
+        Sessie stoppen
+      </button>
+    </section>
+
+  </main>
+
+  <!-- Sjabloon voor één trade in de sessielijst -->
+  <template id="session-item">
+    <li class="bg-slate-800 rounded-lg p-3 flex justify-between items-center gap-3">
+      <div class="min-w-0">
+        <p data-role="title" class="font-semibold"></p>
+        <p data-role="meta" class="text-xs text-slate-400 truncate"></p>
+      </div>
+      <p data-role="pnl" class="font-bold shrink-0"></p>
+    </li>
+  </template>
+
+  <script src="js/trades.js"></script>
+  <script src="js/replay.js"></script>
+</body>
+</html>

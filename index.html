@@ -3,23 +3,30 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#020617">
   <title>Trade Backtester</title>
-  <!-- Tailwind CSS via CDN (prima voor leren/prototypen) -->
-  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <!-- Tailwind CSS via CDN, vaste versie zodat een update de app niet kan breken -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.11"></script>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen">
   <main class="max-w-xl mx-auto p-4 space-y-6">
 
-    <header>
-      <h1 class="text-2xl font-bold">Trade Backtester</h1>
-      <p class="text-slate-400 text-sm">Log je trades en test je day-trading strategie.</p>
+    <header class="space-y-3">
+      <div>
+        <h1 class="text-2xl font-bold">Trade Backtester</h1>
+        <p class="text-slate-400 text-sm">Log je trades en test je day-trading strategie.</p>
+      </div>
+      <nav class="grid grid-cols-2 gap-2 bg-slate-900 rounded-xl p-1 text-sm font-semibold text-center">
+        <a href="index.html" class="bg-slate-700 rounded-lg p-2">Journaal</a>
+        <a href="replay.html" class="text-slate-400 hover:text-slate-100 rounded-lg p-2">Replay</a>
+      </nav>
     </header>
 
     <!-- Statistieken -->
     <section class="grid grid-cols-3 gap-3 text-center">
       <div class="bg-slate-900 rounded-xl p-3">
         <p class="text-xs text-slate-400">Totaal P&amp;L</p>
-        <p id="stat-pnl" class="text-lg font-bold">€0.00</p>
+        <p id="stat-pnl" class="text-lg font-bold">$0.00</p>
       </div>
       <div class="bg-slate-900 rounded-xl p-3">
         <p class="text-xs text-slate-400">Win rate</p>
@@ -34,40 +41,69 @@
     <!-- Functie 1: trade loggen -->
     <section class="bg-slate-900 rounded-xl p-4">
       <h2 class="font-semibold mb-3">Nieuwe trade</h2>
-      <form id="trade-form" class="grid grid-cols-2 gap-3">
-        <input name="symbol" placeholder="Symbool (bv. AAPL)" required
+      <form id="trade-form" class="grid grid-cols-2 gap-3" novalidate>
+        <label class="col-span-2 text-xs text-slate-400">
+          Datum en tijd
+          <input name="date" type="datetime-local" required
+                 class="mt-1 w-full bg-slate-800 text-slate-100 text-base rounded-lg p-3">
+        </label>
+        <input name="symbol" placeholder="Symbool (bv. AAPL)" required autocomplete="off"
                class="col-span-2 bg-slate-800 rounded-lg p-3 uppercase">
         <select name="side" class="bg-slate-800 rounded-lg p-3">
           <option value="long">Long</option>
           <option value="short">Short</option>
         </select>
-        <input name="strategy" placeholder="Strategie" required
-               class="bg-slate-800 rounded-lg p-3">
-        <input name="entry" type="number" step="any" placeholder="Entry prijs" required
-               class="bg-slate-800 rounded-lg p-3">
-        <input name="exit" type="number" step="any" placeholder="Exit prijs" required
-               class="bg-slate-800 rounded-lg p-3">
-        <input name="quantity" type="number" step="any" placeholder="Aantal" required
-               class="bg-slate-800 rounded-lg p-3">
-        <input name="fees" type="number" step="any" placeholder="Kosten (optioneel)"
-               class="bg-slate-800 rounded-lg p-3">
+        <input name="strategy" placeholder="Strategie" required list="strategy-options" autocomplete="off"
+               class="bg-slate-800 rounded-lg p-3 min-w-0">
+        <datalist id="strategy-options"></datalist>
+        <input name="entry" type="number" step="any" min="0" inputmode="decimal" placeholder="Entry prijs" required
+               class="bg-slate-800 rounded-lg p-3 min-w-0">
+        <input name="exit" type="number" step="any" min="0" inputmode="decimal" placeholder="Exit prijs" required
+               class="bg-slate-800 rounded-lg p-3 min-w-0">
+        <input name="quantity" type="number" step="any" min="0" inputmode="decimal" placeholder="Aantal / contracten" required
+               class="bg-slate-800 rounded-lg p-3 min-w-0">
+        <input name="fees" type="number" step="any" min="0" inputmode="decimal" placeholder="Kosten (optioneel)"
+               class="bg-slate-800 rounded-lg p-3 min-w-0">
+        <p id="form-error" role="alert"
+           class="hidden col-span-2 text-sm text-red-300 bg-red-950/60 rounded-lg p-3"></p>
         <button type="submit"
-                class="col-span-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg p-3 font-semibold">
+                class="col-span-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 rounded-lg p-3 font-semibold">
           Trade opslaan
         </button>
       </form>
+    </section>
+
+    <!-- Resultaten per strategie -->
+    <section id="strategy-section" class="hidden bg-slate-900 rounded-xl p-4">
+      <h2 class="font-semibold mb-3">Per strategie</h2>
+      <table class="w-full text-sm">
+        <thead class="text-xs text-slate-400">
+          <tr>
+            <th class="text-left font-normal pb-2">Strategie</th>
+            <th class="text-right font-normal pb-2 px-1">#</th>
+            <th class="text-right font-normal pb-2 px-1">Win</th>
+            <th class="text-right font-normal pb-2 px-1" title="Totale winst / totaal verlies">PF</th>
+            <th class="text-right font-normal pb-2 px-1">P&amp;L</th>
+          </tr>
+        </thead>
+        <tbody id="strategy-table"></tbody>
+      </table>
     </section>
 
     <!-- Functie 3: filterbare geschiedenis -->
     <section class="bg-slate-900 rounded-xl p-4">
       <h2 class="font-semibold mb-3">Trade-geschiedenis</h2>
       <div class="grid grid-cols-2 gap-3 mb-4">
-        <input id="filter-symbol" placeholder="Filter symbool"
-               class="bg-slate-800 rounded-lg p-3 uppercase">
-        <select id="filter-result" class="bg-slate-800 rounded-lg p-3">
+        <input id="filter-symbol" type="search" placeholder="Filter symbool" autocomplete="off"
+               class="col-span-2 bg-slate-800 rounded-lg p-3 uppercase">
+        <select id="filter-strategy" class="bg-slate-800 rounded-lg p-3 min-w-0">
+          <option value="all">Alle strategieën</option>
+        </select>
+        <select id="filter-result" class="bg-slate-800 rounded-lg p-3 min-w-0">
           <option value="all">Alles</option>
           <option value="win">Winst</option>
           <option value="loss">Verlies</option>
+          <option value="breakeven">Break-even</option>
         </select>
       </div>
       <ul id="trade-list" class="space-y-2"></ul>
@@ -76,6 +112,23 @@
 
   </main>
 
+  <!-- Sjabloon voor één trade in de lijst -->
+  <template id="trade-item">
+    <li class="bg-slate-800 rounded-lg p-3 flex justify-between items-center gap-3">
+      <div class="min-w-0">
+        <p data-role="title" class="font-semibold"></p>
+        <p data-role="meta" class="text-xs text-slate-400 truncate"></p>
+        <p data-role="date" class="text-xs text-slate-500"></p>
+      </div>
+      <div class="text-right shrink-0">
+        <p data-role="pnl" class="font-bold"></p>
+        <button data-role="delete" type="button"
+                class="text-xs text-slate-500 hover:text-red-400 py-1">Verwijder</button>
+      </div>
+    </li>
+  </template>
+
+  <script src="js/trades.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
